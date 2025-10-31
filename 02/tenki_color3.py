@@ -3,6 +3,7 @@ import numpy as np
 import json
 import sys
 from collections import defaultdict
+from typing import List
 
 # ===================================================================
 # ====== 1. 色彩分析関数群 (Script 1 ベース) ======
@@ -224,7 +225,258 @@ def show_final_outfit(items):
     cv2.destroyAllWindows()
 
 
-# ====== 4. メイン実行ロジック ======
+# ====== . メイン実行ロジック ======
+class Item():
+    pass
+
+def suggest(items:List[Item], weather:str, temp: int):
+    # --- 1. 設定とデータ読み込み ---
+    CLOSET_FILE = "closet.json"
+    RULES_FILE = "rules.json"
+    
+    # 天気による体感温度の調整
+    weather_adjustment = {
+        "晴れ": 2,  
+        "曇り": 0,   
+        "雨": -2,   
+        "雪": -3 
+    }
+    
+    adjustment = weather_adjustment.get(CURRENT_WEATHER, 0)
+    
+    # 最終的に使用する「体感温度」
+    ADJUSTED_TEMPERATURE = BASE_TEMPERATURE + adjustment
+
+
+    print(f"*** ファッションコーディネート提案 ***")
+    print(f"現在の設定気温: {BASE_TEMPERATURE}度")
+    print(f"天気: {CURRENT_WEATHER} (体感調整: {adjustment:+}度)")
+    print(f" -> 体感温度: {ADJUSTED_TEMPERATURE}度 で服を検索します")
+    
+    ALL_ITEMS_RULES = load_json_data(RULES_FILE)
+
+    if ALL_ITEMS_RULES is None or items is None:
+        print("\n[エラー] データファイルの読み込みに失敗したため、処理を終了します。")
+        sys.exit() # プログラムを終了
+
+    # 2. 気温に基づく服の絞り込み 
+    allowed_types = get_allowed_clothing_types(ADJUSTED_TEMPERATURE, ALL_ITEMS_RULES)
+    wearable_clothes = filter_my_closet(allowed_types, items) # 関数の入力形式を合わせる
+
+    if not wearable_clothes:
+        #  メッセージを体感温度基準に変更
+        raise f"\n[結果] 体感温度{ADJUSTED_TEMPERATURE}度で着られる服はありません。"
+
+    print("\n--- 3. 着用可能な服の代表色を抽出中... ---")
+    
+    categorized_closet = defaultdict(list)
+    
+    for item in wearable_clothes:
+        # 必要なキーのチェック
+        if 'category' not in item or 'image_path' not in item:
+            print(f"  [警告] {item['name']} に 'category' または 'image_path' がありません。スキップします。")
+            continue
+            
+        try:
+            # 色情報を抽出し、アイテム辞書に追加
+            color_data = extract_representative_color(item['image_path'])
+            item.update(color_data) # 'hsv' と 'rgb' キーが追加される
+            
+            # カテゴリ別に分類
+            categorized_closet[item['category']].append(item)
+            print(f"  [成功] {item['name']} ({item['category']}) の色を抽出完了。")
+            
+        except FileNotFoundError:
+            print(f"  [エラー] {item['name']} の画像 ({item['image_path']}) が見つかりません。")
+        except Exception as e:
+            print(f"  [エラー] {item['name']} の処理中に問題発生: {e}")
+
+    # 分類結果を取得
+    wearable_tops = categorized_closet.get('Tops', [])
+    wearable_bottoms = categorized_closet.get('Bottoms', [])
+    wearable_outers = categorized_closet.get('Outerwear', [])
+    wearable_others = categorized_closet.get('Other', [])
+    # ★★★ 変更点 1: Accessory リストを取得 ★★★
+    wearable_accessories = categorized_closet.get('Accessory', [])
+
+    # --- 4. 必須アイテム（トップス・ボトムス）の確認 ---
+    if not wearable_tops or not wearable_bottoms:
+        print("\n[エラー] 着用可能なトップス、またはボトムスが見つかりませんでした。")
+        print(f"  (トップス: {len(wearable_tops)}着, ボトムス: {len(wearable_bottoms)}着)")
+        sys.exit()
+    else:
+        print(f"\n--- 4. 最適なトップスとボトムスのペアを検索 ---")
+        print(f" (トップス {len(wearable_tops)}着, ボトムス {len(wearable_bottoms)}着 で総当たり)")
+
+    # --- 5. 最高のトップスxボトムス ペアを探す ---
+    best_pair = None
+    best_pair_score = -1.0 
+
+    for top in wearable_tops:
+        for bottom in wearable_bottoms:
+            score = color_score(top['hsv'], bottom['hsv'])
+            
+            if score > best_pair_score:
+                best_pair_score = score
+                best_pair = {'top': top, 'bottom': bottom}
+
+    print(f"\n--- 5. 検索完了: ベストペア (スコア: {best_pair_score:.3f}) ---")
+    print_color_info("Tops", best_pair['top'])
+    print_color_info("Bottoms", best_pair['bottom'])
+
+    # --- 6. 最高のペアに合うアウターを探す ---
+    best_outer = None
+    
+    if not wearable_outers:
+        print("\n--- 6. アウター検索 ---")
+        print("  -> 体感温度に合う着用可能なアウターがありません。アウターなしを推奨します。")
+    else:
+        print(f"\n--- 6. ペアに合う最適なアウターを検索 ---")
+        print(f" (アウター {len(wearable_outers)}着 で総当たり)")
+        
+        best_outer_score = -1.0
+        chosen_top_hsv = best_pair['top']['hsv']
+        chosen_bottom_hsv = best_pair['bottom']['hsv']
+
+        for outer in wearable_outers:
+            score_with_top = color_score(outer['hsv'], chosen_top_hsv)
+            score_with_bottom = color_score(outer['hsv'], chosen_bottom_hsv)
+            combined_score = (score_with_top + score_with_bottom) / 2.0
+            
+            print(f"  - 試行: {outer['name']} (vs Top: {score_with_top:.3f}, vs Bottom: {score_with_bottom:.3f}) -> 総合: {combined_score:.3f}")
+
+            if combined_score > best_outer_score:
+                best_outer_score = combined_score
+                best_outer = outer
+        
+        if best_outer:
+            print(f"\n--- 6. 検索完了: ベストなアウター (スコア: {best_outer_score:.3f}) ---")
+            print_color_info("Outerwear", best_outer)
+        else:
+            print("\n--- 6. 検索完了: マッチするアウターなし ---")
+
+    # --- 7. (新設) 決定済みコーデのHSVリストを作成 ---
+    # (Step 8 と 9 で共通して使用する)
+    print("\n--- コーデの基本色を確定 ---")
+    chosen_hsv_list = [
+        best_pair['top']['hsv'],
+        best_pair['bottom']['hsv']
+    ]
+    print(f"  - Tops: {best_pair['top']['name']}")
+    print(f"  - Bottoms: {best_pair['bottom']['name']}")
+    
+    if best_outer:
+        chosen_hsv_list.append(best_outer['hsv'])
+        print(f"  - Outerwear: {best_outer['name']}")
+    
+
+    # ★★★ 変更点 2: Accessory のスコア計算ロジックを追加 ★★★
+    # --- 8. コーデに合う最適なアクセサリーを探す ---
+    best_accessory = None
+    if not wearable_accessories:
+        print("\n--- 8. アクセサリー検索 ---")
+        print("  -> 体感温度に合う着用可能なアクセサリーがありません。")
+    else:
+        # 1つでも複数でもスコア計算を実行
+        print(f"\n--- 8. コーデに合う最適なアクセサリーを検索 ---")
+        print(f" (アクセサリー {len(wearable_accessories)}点 で総当たり)")
+        
+        best_accessory_score = -1.0
+
+        for accessory in wearable_accessories:
+            total_score = 0
+            # 決定したコーデの各アイテム(Top, Bottom, Outer)とのスコアを合計
+            for hsv in chosen_hsv_list:
+                total_score += color_score(accessory['hsv'], hsv)
+            
+            # 平均スコアで評価
+            avg_score = total_score / len(chosen_hsv_list)
+            
+            print(f"  - 試行: {accessory['name']} (平均スコア: {avg_score:.3f})")
+
+            if avg_score > best_accessory_score:
+                best_accessory_score = avg_score
+                best_accessory = accessory
+        
+        if best_accessory: # 見つかった場合のみ表示
+            print(f"\n--- 8. 検索完了: ベストなアクセサリー (スコア: {best_accessory_score:.3f}) ---")
+            print_color_info("Accessory", best_accessory)
+        else:
+            print("\n--- 8. 検索完了: マッチするアクセサリーなし ---")
+
+
+    # --- 9. (旧 8) コーデに合う「その他」を探す ---
+    best_other = None
+    if not wearable_others:
+        print("\n--- 9. 「その他」アイテム検索 ---")
+        print("  -> 体感温度に合う着用可能な「その他」アイテムがありません。")
+    else:
+        print(f"\n--- 9. コーデに合う最適な「その他」アイテムを検索 ---")
+        print(f" (アイテム {len(wearable_others)}点 で総当たり)")
+        
+        best_other_score = -1.0
+
+        for other_item in wearable_others:
+            total_score = 0
+            for hsv in chosen_hsv_list:
+                total_score += color_score(other_item['hsv'], hsv)
+            
+            avg_score = total_score / len(chosen_hsv_list)
+            
+            print(f"  - 試行: {other_item['name']} (平均スコア: {avg_score:.3f})")
+
+            if avg_score > best_other_score:
+                best_other_score = avg_score
+                best_other = other_item
+        
+        if best_other: 
+            print(f"\n--- 9. 検索完了: ベストな「その他」 (スコア: {best_other_score:.3f}) ---")
+            print_color_info("Other", best_other)
+        else:
+            print("\n--- 9. 検索完了: マッチする「その他」アイテムなし ---")
+    
+    # --- 10. (旧 9) 最終結果の表示 ---
+    print("\n===================================")
+    print(f"     気温 {BASE_TEMPERATURE}度 ({CURRENT_WEATHER}) のおすすめコーデ")
+    print(f"     (体感温度 {ADJUSTED_TEMPERATURE}度 基準)")
+    print("===================================")
+    
+    final_items = [] 
+    
+    print(f"  Tops:    {best_pair['top']['name']}")
+    final_items.append(best_pair['top'])
+    
+    print(f"  Bottoms: {best_pair['bottom']['name']}")
+    final_items.append(best_pair['bottom'])
+    
+    if best_outer:
+        print(f"  Outer:   {best_outer['name']}")
+        final_items.append(best_outer)
+    else:
+        print("  Outer:   (アウターなし)")
+    
+    if best_other:
+        print(f"  Other:   {best_other['name']}")
+        final_items.append(best_other)
+    else:
+        print("  Other:   (なし)")
+        
+    print("===================================")
+    
+    if best_accessory:
+        print(f"  気温に適した Accessory: {best_accessory['name']}")
+        final_items.append(best_accessory)
+    else:
+        print("  Accessory: (なし)")
+
+    # 最終的な色の組み合わせを可視化
+    try:
+        show_final_outfit(final_items)
+    except Exception as e:
+        print(f"\n[警告] 色の可視化ウィンドウの表示に失敗しました: {e}")
+        print("（OpenCVがGUI環境で実行されていない可能性があります）")
+    return
+
 
 if __name__ == "__main__":
     

@@ -65,8 +65,16 @@
     "category": "Accessory",
     "image_path": "closet_images/straw_hat.jpg"
   },
-  {"name": "Acneのマフラー",
+  {
+    "name": "Acneのマフラー",
     "type": "マフラー",
     "category": "Accessory",
-    "image_path": "closet_images/acne_muffler.jpg"}
+    "image_path": "closet_images/1.jpg"
+  },
+  {
+    "name": "青いセーター",
+    "type": "セーター",
+    "category": "Tops",
+    "image_path": "closet_images/2.jpeg"
+  }
 ]
