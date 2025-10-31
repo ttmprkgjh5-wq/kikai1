@@ -64,5 +64,9 @@
     "type": "麦わら帽子",
     "category": "Accessory",
     "image_path": "closet_images/straw_hat.jpg"
-  }
+  },
+  {"name": "Acneのマフラー",
+    "type": "マフラー",
+    "category": "Accessory",
+    "image_path": "closet_images/acne_muffler.jpg"}
 ]

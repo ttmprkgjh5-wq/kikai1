@@ -239,7 +239,7 @@ if __name__ == "__main__":
     weather_adjustment = {
         "晴れ": 2,  
         "曇り": 0,   
-        "雨": -2,  
+        "雨": -2,   
         "雪": -3 
     }
     
@@ -265,7 +265,7 @@ if __name__ == "__main__":
     wearable_clothes = filter_my_closet(allowed_types, my_closet)
 
     if not wearable_clothes:
-        #  メッセージを体感温度基準に変更
+        #  メッセージを体感温度基準に変更
         print(f"\n[結果] 体感温度{ADJUSTED_TEMPERATURE}度で着られる服はありません。")
         sys.exit()
 
@@ -298,6 +298,8 @@ if __name__ == "__main__":
     wearable_bottoms = categorized_closet.get('Bottoms', [])
     wearable_outers = categorized_closet.get('Outerwear', [])
     wearable_others = categorized_closet.get('Other', [])
+    # ★★★ 変更点 1: Accessory リストを取得 ★★★
+    wearable_accessories = categorized_closet.get('Accessory', [])
 
     # --- 4. 必須アイテム（トップス・ボトムス）の確認 ---
     if not wearable_tops or not wearable_bottoms:
@@ -310,11 +312,10 @@ if __name__ == "__main__":
 
     # --- 5. 最高のトップスxボトムス ペアを探す ---
     best_pair = None
-    best_pair_score = -1.0 # スコアは 0-1 なので -1 で初期化
+    best_pair_score = -1.0 
 
     for top in wearable_tops:
         for bottom in wearable_bottoms:
-            # 2つのアイテムのHSV値で色相性スコアを計算
             score = color_score(top['hsv'], bottom['hsv'])
             
             if score > best_pair_score:
@@ -328,7 +329,6 @@ if __name__ == "__main__":
     # --- 6. 最高のペアに合うアウターを探す ---
     best_outer = None
     
-    # 体感温度に合うアウターがなければスキップ
     if not wearable_outers:
         print("\n--- 6. アウター検索 ---")
         print("  -> 体感温度に合う着用可能なアウターがありません。アウターなしを推奨します。")
@@ -341,11 +341,8 @@ if __name__ == "__main__":
         chosen_bottom_hsv = best_pair['bottom']['hsv']
 
         for outer in wearable_outers:
-            # アウターと「トップス」「ボトムス」それぞれのスコアを計算
             score_with_top = color_score(outer['hsv'], chosen_top_hsv)
             score_with_bottom = color_score(outer['hsv'], chosen_bottom_hsv)
-            
-            # 総合スコア (例: 2つのスコアの平均)
             combined_score = (score_with_top + score_with_bottom) / 2.0
             
             print(f"  - 試行: {outer['name']} (vs Top: {score_with_top:.3f}, vs Bottom: {score_with_bottom:.3f}) -> 総合: {combined_score:.3f}")
@@ -354,11 +351,14 @@ if __name__ == "__main__":
                 best_outer_score = combined_score
                 best_outer = outer
         
-        print(f"\n--- 6. 検索完了: ベストなアウター (スコア: {best_outer_score:.3f}) ---")
-        print_color_info("Outerwear", best_outer)
+        if best_outer:
+            print(f"\n--- 6. 検索完了: ベストなアウター (スコア: {best_outer_score:.3f}) ---")
+            print_color_info("Outerwear", best_outer)
+        else:
+            print("\n--- 6. 検索完了: マッチするアウターなし ---")
 
     # --- 7. (新設) 決定済みコーデのHSVリストを作成 ---
-    # (Step 8 で共通して使用する)
+    # (Step 8 と 9 で共通して使用する)
     print("\n--- コーデの基本色を確定 ---")
     chosen_hsv_list = [
         best_pair['top']['hsv'],
@@ -371,24 +371,58 @@ if __name__ == "__main__":
         chosen_hsv_list.append(best_outer['hsv'])
         print(f"  - Outerwear: {best_outer['name']}")
     
-    # --- 8. (修正) コーデに合う「その他」を探す ---
+
+    # ★★★ 変更点 2: Accessory のスコア計算ロジックを追加 ★★★
+    # --- 8. コーデに合う最適なアクセサリーを探す ---
+    best_accessory = None
+    if not wearable_accessories:
+        print("\n--- 8. アクセサリー検索 ---")
+        print("  -> 体感温度に合う着用可能なアクセサリーがありません。")
+    else:
+        # 1つでも複数でもスコア計算を実行
+        print(f"\n--- 8. コーデに合う最適なアクセサリーを検索 ---")
+        print(f" (アクセサリー {len(wearable_accessories)}点 で総当たり)")
+        
+        best_accessory_score = -1.0
+
+        for accessory in wearable_accessories:
+            total_score = 0
+            # 決定したコーデの各アイテム(Top, Bottom, Outer)とのスコアを合計
+            for hsv in chosen_hsv_list:
+                total_score += color_score(accessory['hsv'], hsv)
+            
+            # 平均スコアで評価
+            avg_score = total_score / len(chosen_hsv_list)
+            
+            print(f"  - 試行: {accessory['name']} (平均スコア: {avg_score:.3f})")
+
+            if avg_score > best_accessory_score:
+                best_accessory_score = avg_score
+                best_accessory = accessory
+        
+        if best_accessory: # 見つかった場合のみ表示
+            print(f"\n--- 8. 検索完了: ベストなアクセサリー (スコア: {best_accessory_score:.3f}) ---")
+            print_color_info("Accessory", best_accessory)
+        else:
+            print("\n--- 8. 検索完了: マッチするアクセサリーなし ---")
+
+
+    # --- 9. (旧 8) コーデに合う「その他」を探す ---
     best_other = None
     if not wearable_others:
-        print("\n--- 8. 「その他」アイテム検索 ---")
+        print("\n--- 9. 「その他」アイテム検索 ---")
         print("  -> 体感温度に合う着用可能な「その他」アイテムがありません。")
     else:
-        print(f"\n--- 8. コーデに合う最適な「その他」アイテムを検索 ---")
+        print(f"\n--- 9. コーデに合う最適な「その他」アイテムを検索 ---")
         print(f" (アイテム {len(wearable_others)}点 で総当たり)")
         
         best_other_score = -1.0
 
         for other_item in wearable_others:
             total_score = 0
-            # 決定したコーデの各アイテム(Top, Bottom, Outer)とのスコアを合計
-            for hsv in chosen_hsv_list: # <- ここも 'chosen_hsv_list' を使う
+            for hsv in chosen_hsv_list:
                 total_score += color_score(other_item['hsv'], hsv)
             
-            # 平均スコアで評価
             avg_score = total_score / len(chosen_hsv_list)
             
             print(f"  - 試行: {other_item['name']} (平均スコア: {avg_score:.3f})")
@@ -397,20 +431,19 @@ if __name__ == "__main__":
                 best_other_score = avg_score
                 best_other = other_item
         
-        if best_other: # 見つかった場合のみ表示
-            print(f"\n--- 8. 検索完了: ベストな「その他」 (スコア: {best_other_score:.3f}) ---")
+        if best_other: 
+            print(f"\n--- 9. 検索完了: ベストな「その他」 (スコア: {best_other_score:.3f}) ---")
             print_color_info("Other", best_other)
         else:
-            print("\n--- 8. 検索完了: マッチする「その他」アイテムなし ---")
+            print("\n--- 9. 検索完了: マッチする「その他」アイテムなし ---")
     
-    # --- 9. 最終結果の表示 ---
+    # --- 10. (旧 9) 最終結果の表示 ---
     print("\n===================================")
-    # ★ 表示内容を更新
     print(f"     気温 {BASE_TEMPERATURE}度 ({CURRENT_WEATHER}) のおすすめコーデ")
     print(f"     (体感温度 {ADJUSTED_TEMPERATURE}度 基準)")
     print("===================================")
     
-    final_items = [] # 可視化用のリスト
+    final_items = [] 
     
     print(f"  Tops:    {best_pair['top']['name']}")
     final_items.append(best_pair['top'])
@@ -432,6 +465,12 @@ if __name__ == "__main__":
         
     print("===================================")
     
+    if best_accessory:
+        print(f"  気温に適した Accessory: {best_accessory['name']}")
+        final_items.append(best_accessory)
+    else:
+        print("  Accessory: (なし)")
+
     # 最終的な色の組み合わせを可視化
     try:
         show_final_outfit(final_items)
