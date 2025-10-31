@@ -1,3 +1,5 @@
+from PIL import Image
+
 class ClothingItem:
     def __init__(self, name, item_type, category, image_path):
         self.name = name
@@ -11,6 +13,9 @@ class ClothingItem:
 
     def __repr__(self):
         return f"ClothingItem(name='{self.name}', type='{self.item_type}', category='{self.category}')"
+    
+    def open_image(self):
+        return Image.open(self.image_path)
 
 def initialize_closet():
     closet_data = [

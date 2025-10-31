@@ -5,23 +5,9 @@ import sys
 from collections import defaultdict
 import os
 from typing import List, Dict, Optional, Any, Tuple
+from closet import ClothingItem, initialize_closet
 
-# ===================================================================
-# ====== 0. (新設) closet.py からクラスと関数をインポート ======
-# ===================================================================
-try:
-    # closet.py から Item クラスと初期化関数を読み込む
-    from closet import Item, initialize_closet
-except ImportError:
-    print("[エラー] 'closet.py' が同じフォルダ内に見つかりません。")
-    sys.exit()
-
-
-# ===================================================================
-# ====== 1. 色彩分析関数群 (ヘルパー関数) ======
-# ===================================================================
-# (このセクションは suggest 関数から呼び出される)
-
+# 色彩分析関数群
 def average(values, weights):
     """ 通常の加重平均 """
     return np.sum(values * weights) / np.sum(weights)
@@ -83,12 +69,8 @@ def extract_representative_color(image_path):
 
     return {'hsv': hsv_normalized, 'rgb': rgb_color}
 
-# ===================================================================
-# ====== 2. フィルタリング関数群 (ヘルパー関数) ======
-# ===================================================================
-
+# フィルタリング関数群
 def load_rules_data(file_path):
-    """ rules.json 専用のローダー """
     print(f"\n--- データをロード中: {file_path} ---")
     try:
         if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
@@ -108,7 +90,6 @@ def load_rules_data(file_path):
     return None
 
 def get_allowed_clothing_types(temperature, rules):
-    """ 気温に基づいて着用可能な服の「タイプ」リストを返す """
     print(f"\n--- 関数: 体感温度 {temperature}度 に合う服の「種類」を検索 ---")
     allowed_types = []
     for item_type, rule in rules.items():
@@ -121,8 +102,7 @@ def get_allowed_clothing_types(temperature, rules):
     print(f"  -> 許可された服のタイプ (全{len(allowed_types)}種)")
     return allowed_types
 
-def filter_closet_objects(allowed_types, closet_list: List[Item]) -> List[Item]:
-    """ Item オブジェクトのリストを絞り込む """
+def filter_closet_objects(allowed_types, closet_list: List[ClothingItem]) -> List[ClothingItem]:
     print("\n--- 関数: 自分の服と「許可された種類」を照合 ---")
     allowed_types_set = set(allowed_types)
     wearable_clothes = []
@@ -136,11 +116,8 @@ def filter_closet_objects(allowed_types, closet_list: List[Item]) -> List[Item]:
             
     return wearable_clothes
 
-# ===================================================================
-# ====== 3. 可視化・出力関数群 (ヘルパー関数) ======
-# ===================================================================
-
-def print_color_info(label: str, item: Item):
+#可視化・出力関数群 (ヘルパー関数)
+def print_color_info(label: str, item: ClothingItem):
     """ Item オブジェクトを引数に取る """
     h, s, v = item.hsv
     rgb = item.rgb
@@ -148,7 +125,7 @@ def print_color_info(label: str, item: Item):
     print(f"  HSV: (H={h:.1f}°, S={s:.2f}, V={v:.2f})")
     print(f"  RGB: {rgb}")
 
-def show_final_outfit(items: List[Item]):
+def show_final_outfit(items: List[ClothingItem]):
     """ Item オブジェクトのリストを引数に取る """
     color_blocks = []
     labels = []
@@ -174,25 +151,15 @@ def show_final_outfit(items: List[Item]):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-# ===================================================================
-# ====== 4. メインの提案関数 (ご指定の関数) ======
-# ===================================================================
 
-def suggest(items: List[Item], weather: str, temp: int):
-    """
-    クローゼットのアイテムリスト、天気、気温を受け取り、最適なコーデを提案する。
-    """
-    
-    RULES_FILE = "rules.json" # この関数は rules.json に依存する
-
-    # --- 1. 設定とデータ読み込み ---
-    
+#メインの提案関数 (ご指定の関数)
+def suggest(items: List[ClothingItem], weather: str, temp: int):
+    RULES_FILE = "rules.json" 
     # 天気による体感温度の調整
     weather_adjustment = {"晴れ": 2, "曇り": 0, "雨": -2, "雪": -3}
     adjustment = weather_adjustment.get(weather, 0)
     ADJUSTED_TEMPERATURE = temp + adjustment
 
-    print(f"*** ファッションコーディネート提案 ***")
     print(f"現在の設定気温: {temp}度")
     print(f"天気: {weather} (体感調整: {adjustment:+}度)")
     print(f" -> 体感温度: {ADJUSTED_TEMPERATURE}度 で服を検索します")
@@ -200,22 +167,17 @@ def suggest(items: List[Item], weather: str, temp: int):
     ALL_ITEMS_RULES = load_rules_data(RULES_FILE)
     
     # (クローゼットのリスト 'items' は引数で渡されている)
-
     if ALL_ITEMS_RULES is None or not items:
         print("\n[エラー] rules.json またはクローゼットにアイテムがありません。")
-        return # sys.exit() の代わりに return で関数を抜ける
-
-    # --- 2. 気温に基づく服の絞り込み ---
+        return 
     allowed_types = get_allowed_clothing_types(ADJUSTED_TEMPERATURE, ALL_ITEMS_RULES)
     
-    # 引数で渡された 'items' (全リスト) を絞り込む
     wearable_clothes = filter_closet_objects(allowed_types, items)
 
     if not wearable_clothes:
         print(f"\n[結果] 体感温度{ADJUSTED_TEMPERATURE}度で着られる服はありません。")
         return
 
-    # --- 3. 着用可能な服の代表色を抽出中... ---
     print("\n--- 3. 着用可能な服の代表色を抽出中... ---")
     categorized_closet = defaultdict(list)
     
@@ -232,14 +194,12 @@ def suggest(items: List[Item], weather: str, temp: int):
         except Exception as e:
             print(f"  [エラー] {item.name} の処理中に問題発生: {e}")
 
-    # 分類結果を取得
     wearable_tops = categorized_closet.get('Tops', [])
     wearable_bottoms = categorized_closet.get('Bottoms', [])
     wearable_outers = categorized_closet.get('Outerwear', [])
     wearable_others = categorized_closet.get('Other', [])
     wearable_accessories = categorized_closet.get('Accessory', [])
 
-    # --- 4. 必須アイテム（トップス・ボトムス）の確認 ---
     if not wearable_tops or not wearable_bottoms:
         print("\n[エラー] 着用可能なトップス、またはボトムスが見つかりませんでした。")
         return
@@ -247,7 +207,6 @@ def suggest(items: List[Item], weather: str, temp: int):
         print(f"\n--- 4. 最適なトップスとボトムスのペアを検索 ---")
         print(f" (トップス {len(wearable_tops)}着, ボトムス {len(wearable_bottoms)}着 で総当たり)")
 
-    # --- 5. 最高のトップスxボトムス ペアを探す ---
     best_pair = None
     best_pair_score = -1.0 
 
@@ -262,7 +221,6 @@ def suggest(items: List[Item], weather: str, temp: int):
     print_color_info("Tops", best_pair['top'])
     print_color_info("Bottoms", best_pair['bottom'])
 
-    # --- 6. 最高のペアに合うアウターを探す ---
     best_outer = None
     if not wearable_outers:
         print("\n--- 6. アウター検索 ---")
@@ -287,7 +245,6 @@ def suggest(items: List[Item], weather: str, temp: int):
         else:
             print("\n--- 6. 検索完了: マッチするアウターなし ---")
 
-    # --- 7. 決定済みコーデのHSVリストを作成 ---
     print("\n--- コーデの基本色を確定 ---")
     chosen_hsv_list = [best_pair['top'].hsv, best_pair['bottom'].hsv]
     print(f"  - Tops: {best_pair['top'].name}")
@@ -296,7 +253,6 @@ def suggest(items: List[Item], weather: str, temp: int):
         chosen_hsv_list.append(best_outer.hsv)
         print(f"  - Outerwear: {best_outer.name}")
 
-    # --- 8. 最適なアクセサリーを探す ---
     best_accessory = None
     if not wearable_accessories:
         print("\n--- 8. アクセサリー検索 ---")
@@ -343,42 +299,21 @@ def suggest(items: List[Item], weather: str, temp: int):
             print_color_info("Other", best_other)
         else:
             print("\n--- 9. 検索完了: マッチする「その他」アイテムなし ---")
-    
-    # --- 10. 最終結果の表示 ---
-    print("\n===================================")
-    print(f"     気温 {temp}度 ({weather}) のおすすめコーデ")
-    print(f"     (体感温度 {ADJUSTED_TEMPERATURE}度 基準)")
-    print("===================================")
-    
-    # final_items は None になる可能性のあるアイテムも含む
-    final_items_for_display = [
-        best_pair['top'],
-        best_pair['bottom'],
-        best_outer,  # (None かもしれない)
-        best_other   # (None かもしれない)
-    ]
-    
-    print(f"  Tops:    {best_pair['top'].name}")
-    print(f"  Bottoms: {best_pair['bottom'].name}")
-    print(f"  Outer:   {best_outer.name if best_outer else '(アウターなし)'}")
-    print(f"  Other:   {best_other.name if best_other else '(なし)'}")
-    print("===================================")
-    
-    if best_accessory:
-        print(f"\n  気温に適した Accessory: {best_accessory.name}")
-        final_items_for_display.append(best_accessory)
-    else:
-        print("\n  Accessory: (なし)")
 
-    # 最終的な色の組み合わせを可視化
-    # None を除外したリストを渡す
-    final_items_valid = [item for item in final_items_for_display if item is not None]
-    try:
-        show_final_outfit(final_items_valid)
-    except Exception as e:
-        print(f"\n[警告] 色の可視化ウィンドウの表示に失敗しました: {e}")
-        print("（OpenCVがGUI環境で実行されていない可能性があります）")
-
+    # --- 10. 最終結果を辞書として返す ---
+    
+    # ★ 最終的な結果 (ClothingItem オブジェクトまたは None) を
+    #   辞書にまとめて return する
+    
+    result = {
+        "Tops": best_pair['top'],
+        "Bottoms": best_pair['bottom'],
+        "Outerwear": best_outer,      # None の場合あり
+        "Accessory": best_accessory,  # None の場合あり
+        "Other": best_other,        # None の場合あり
+    }
+    
+    return result
 
 # ===================================================================
 # ====== 5. メイン実行ロジック ======
