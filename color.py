@@ -8,7 +8,7 @@ import numpy as np
 def average(values, weights):
     return np.sum(values * weights) / np.sum(weights) 
 
-# 色相（円データ）の加重平均
+# 色相環の加重平均
 def circular_average(h_values, weights):
     h_deg = h_values * 2  # OpenCVではH:0–179 → 0–358°に変換
     h_rad = np.deg2rad(h_deg)
