@@ -156,7 +156,7 @@ def show_final_outfit(items: List[ClothingItem]):
 def suggest(items: List[ClothingItem], weather: str, temp: int):
     RULES_FILE = "rules.json" 
     # 天気による体感温度の調整
-    weather_adjustment = {"晴れ": 2, "曇り": 0, "雨": -2, "雪": -3}
+    weather_adjustment = {"晴れ": 2, "曇り": 0, "雨": -2, "雪": -5}
     adjustment = weather_adjustment.get(weather, 0)
     ADJUSTED_TEMPERATURE = temp + adjustment
 
@@ -315,17 +315,14 @@ def suggest(items: List[ClothingItem], weather: str, temp: int):
     
     return result
 
-# ===================================================================
 # ====== 5. メイン実行ロジック ======
-# ===================================================================
-
 if __name__ == "__main__":
     
     # 1. closet.py からクローゼットの全アイテムを取得
     my_full_closet = initialize_closet()
     
     # 2. 条件を定義
-    BASE_TEMPERATURE = 7
+    BASE_TEMPERATURE = 30
     CURRENT_WEATHER = "雨"
     
     # 3. メインの提案関数を実行
