@@ -53,16 +53,16 @@ class UNet(nn.Module):
         
         # Decoder (上り)
         self.UC1 = UpConv(1024, 512) 
-        self.TCB6 = TwoConvBlock(1024, 512, 512) # concatするので入力は 512+512=1024
+        self.TCB6 = TwoConvBlock(1024, 512, 512)
 
         self.UC2 = UpConv(512, 256) 
-        self.TCB7 = TwoConvBlock(512, 256, 256) # concat: 256+256=512
+        self.TCB7 = TwoConvBlock(512, 256, 256)
 
         self.UC3 = UpConv(256, 128) 
-        self.TCB8 = TwoConvBlock(256, 128, 128) # concat: 128+128=256
+        self.TCB8 = TwoConvBlock(256, 128, 128)
 
         self.UC4= UpConv(128, 64)
-        self.TCB9 = TwoConvBlock(128, 64, 64)   # concat: 64+64=128
+        self.TCB9 = TwoConvBlock(128, 64, 64)
 
         # 出力層
         self.out_conv = nn.Conv2d(64, n_classes, kernel_size=1)
