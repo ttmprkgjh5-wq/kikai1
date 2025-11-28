@@ -36,13 +36,13 @@ class UpConv(nn.Module):
 
 # --- 本体: U-Netモデル ---
 class UNet(nn.Module):
-    def __init__(self, n_channels, n_classes):
+    def __init__(self, n_classes):
         super().__init__()
-        self.n_channels = n_channels
+        self.n_channels = 3
         self.n_classes = n_classes
 
         # Encoder (下り)
-        self.TCB1 = TwoConvBlock(n_channels, 64, 64)
+        self.TCB1 = TwoConvBlock(self.n_channels, 64, 64)
         self.TCB2 = TwoConvBlock(64, 128, 128)
         self.TCB3 = TwoConvBlock(128, 256, 256)
         self.TCB4 = TwoConvBlock(256, 512, 512)
