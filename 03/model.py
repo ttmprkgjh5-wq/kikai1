@@ -26,7 +26,7 @@ class UpConv(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.up = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=2, padding=0) 
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1) 
         # ここでチャンネル数を調整するための畳み込み
 
     def forward(self, x):
@@ -34,7 +34,7 @@ class UpConv(nn.Module):
         x = self.conv(x)
         return x
 
-# --- 本体: U-Netモデル ---
+# 本体: U-Netモデル
 class UNet(nn.Module):
     def __init__(self, n_classes):
         super().__init__()
@@ -68,7 +68,7 @@ class UNet(nn.Module):
         self.out_conv = nn.Conv2d(64, n_classes, kernel_size=1)
 
     def forward(self, x):
-        # --- Encoder ---
+        # Encoder
         x1 = self.TCB1(x)
         x_pool1 = self.maxpool(x1)
 
@@ -83,7 +83,7 @@ class UNet(nn.Module):
 
         x5 = self.TCB5(x_pool4)
 
-        # --- Decoder (Skip Connectionあり) ---
+        # Decoder (Skip Connectionあり)
         x = self.UC1(x5)
         # ここでサイズが合うように結合 (x4とxを結合)
         x = torch.cat([x4, x], dim=1) 
